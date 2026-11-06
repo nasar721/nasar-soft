@@ -1,20 +1,50 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ناصر سوفت | Nasser Soft
 
-# Run and deploy your AI Studio app
+تطبيق ويب عربي لإدارة العمليات اليومية للمنشآت الصغيرة، مع واجهة عربية واتجاه عرض من اليمين إلى اليسار.
 
-This contains everything you need to run your app locally.
+## الوحدات الموجودة في المشروع
 
-View your app in AI Studio: https://ai.studio/apps/drive/1H9jX8P3kRMXf9D7mKjiDZNZNsVPUwwmk
+- لوحة معلومات.
+- تسجيل العمليات والقيود المحاسبية وعرضها.
+- الفواتير.
+- إدارة المخزون والمستودعات.
+- إدارة العملاء والموردين والأطراف.
+- إدارة الموظفين.
+- التقارير المالية وتقارير المخزون.
+- إعدادات المنشأة وبيانات الفواتير.
 
-## Run Locally
+## التقنيات
 
-**Prerequisites:**  Node.js
+- React 19
+- TypeScript
+- Vite
+- Heroicons
+- Recharts
 
+## التشغيل محليًا
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+المتطلبات: Node.js و npm.
+
+```bash
+npm install
+npm run dev
+```
+
+لبناء نسخة الإنتاج ومعاينتها:
+
+```bash
+npm run build
+npm run preview
+```
+
+## تخزين البيانات
+
+يحفظ الإصدار الحالي بيانات القيود والمخزون والموظفين والعملاء والموردين والفواتير والإعدادات في `localStorage` داخل المتصفح. لذلك لا تنتقل البيانات تلقائيًا بين الأجهزة أو المتصفحات، وقد تفقد عند مسح بيانات المتصفح. أضف نسخًا احتياطيًا وتخزينًا آمنًا قبل استخدامه في عمل فعلي.
+
+## قبل الاستخدام الفعلي
+
+هذا المشروع قيد التطوير ويحتاج إلى اختبارات محاسبية ووظيفية، ومراجعة صلاحيات المستخدمين، وآلية نسخ احتياطي واستعادة. القيم الافتراضية الظاهرة في الكود أمثلة تجريبية ويجب تعديلها لتناسب المنشأة.
+
+## الملاحظات والمساهمة
+
+استخدم Issues لاقتراح التحسينات أو الإبلاغ عن الأخطاء. لا ترفق بيانات عملاء أو سجلات مالية حقيقية في البلاغات.
