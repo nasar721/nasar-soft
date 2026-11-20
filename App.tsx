@@ -12,11 +12,12 @@ import Parties from './components/Parties.tsx';
 import Header from './components/Header.tsx';
 import Settings from './components/Settings.tsx';
 import InventoryReport from './components/InventoryReport.tsx';
+import BackupRestore from './components/BackupRestore.tsx';
 import { 
   HomeIcon, ShoppingBagIcon, CubeIcon, 
   ChartBarIcon, IdentificationIcon, ListBulletIcon, 
   PlusIcon, ArrowUpIcon, ArrowDownIcon, 
-  Cog6ToothIcon, BeakerIcon 
+  Cog6ToothIcon, BeakerIcon, ArrowDownTrayIcon 
 } from '@heroicons/react/24/outline';
 
 const DEFAULT_ACCOUNTS: Account[] = [
@@ -46,7 +47,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
 };
 
 const App: React.FC = () => {
-  type Tab = 'dashboard' | 'cashier' | 'warehouse' | 'hr' | 'reports' | 'inventory_report' | 'parties' | 'transactions' | 'add' | 'settings';
+  type Tab = 'dashboard' | 'cashier' | 'warehouse' | 'hr' | 'reports' | 'inventory_report' | 'parties' | 'transactions' | 'add' | 'settings' | 'backup';
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [preselectedType, setPreselectedType] = useState<TransactionType>(TransactionType.EXPENSE);
@@ -313,6 +314,26 @@ const App: React.FC = () => {
         {activeTab === 'transactions' && <TransactionList headers={headers} lines={lines} accounts={accounts} onDelete={(id) => { setHeaders(prev => prev.filter(h => h.id !== id)); setLines(prev => prev.filter(l => l.headerId !== id)); }} onQuickAdd={handleQuickAdd} />}
         {activeTab === 'add' && <TransactionForm onAdd={addTransaction} initialType={preselectedType} />}
         {activeTab === 'settings' && <Settings settings={companySettings} onSave={setCompanySettings} />}
+        {activeTab === 'backup' && (
+          <BackupRestore
+            headers={headers}
+            lines={lines}
+            inventory={inventory}
+            employees={employees}
+            parties={parties}
+            invoices={invoices}
+            companySettings={companySettings}
+            onRestore={(data) => {
+              setHeaders(data.headers);
+              setLines(data.lines);
+              setInventory(data.inventory);
+              setEmployees(data.employees);
+              setParties(data.parties);
+              setInvoices(data.invoices);
+              setCompanySettings({ ...DEFAULT_SETTINGS, ...data.companySettings });
+            }}
+          />
+        )}
 
         <div className="fixed bottom-28 left-6 z-[60] flex flex-col items-center gap-3 print:hidden">
           {isFabOpen && (
@@ -359,6 +380,10 @@ const App: React.FC = () => {
         <button onClick={() => setActiveTab('settings')} className={`flex-shrink-0 px-4 flex flex-col items-center gap-1.5 transition-all ${activeTab === 'settings' ? 'text-blue-600' : 'text-slate-300'}`}>
           <Cog6ToothIcon className="w-5 h-5 stroke-[2.5]" />
           <span className="text-[8px] font-black uppercase tracking-wider">الإعدادات</span>
+        </button>
+        <button onClick={() => setActiveTab('backup')} className={`flex-shrink-0 px-4 flex flex-col items-center gap-1.5 transition-all ${activeTab === 'backup' ? 'text-blue-600' : 'text-slate-300'}`}>
+          <ArrowDownTrayIcon className="w-5 h-5 stroke-[2.5]" />
+          <span className="text-[8px] font-black uppercase tracking-wider">النسخ</span>
         </button>
       </nav>
     </div>
