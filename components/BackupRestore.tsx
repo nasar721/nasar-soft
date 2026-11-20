@@ -68,10 +68,10 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({
         throw new Error('النسخة غير مكتملة أو تالفة؛ لم يتم تغيير أي بيانات.');
       }
       const rows = (key: string) => data[key] as unknown[];
-      const hasFields = (row: unknown, fields: string[]) =>
+      const hasFields = (row: unknown, fields: string[]): row is Record<string, unknown> =>
         isRecord(row) && fields.every(field => field in row);
-      const nonEmptyString = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
-      const finiteNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
+      const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+      const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
       const uniqueIds = (key: string) => {
         const ids = rows(key).map(row => isRecord(row) ? row.id : undefined);
         return ids.every(nonEmptyString) && new Set(ids).size === ids.length;
