@@ -130,6 +130,37 @@ class _HomePageState extends State<HomePage> {
           )).toList(),
   );
 
+  Widget reportPage() => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      const Text('ملخص الحسابات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      for (final entry in <String, Object?>{
+        'إجمالي المبيعات': stats['income'],
+        'التكاليف والمصروفات': stats['expenses'],
+        'صافي الربح التقديري': stats['profit'],
+        'قيمة المخزون بالتكلفة': stats['stock'],
+        'مستحقات العملاء': stats['receivable'],
+        'مستحقات الموردين': stats['payable'],
+        'عدد الفواتير': stats['invoices'],
+      }.entries)
+        Card(
+          child: ListTile(
+            title: Text(entry.key),
+            trailing: Text(
+              entry.value is num ? money(entry.value) : '${entry.value ?? 0}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      const SizedBox(height: 8),
+      const Text(
+        'ملاحظة: صافي الربح هنا مؤشر مبسط، وليس قائمة دخل نهائية؛ يلزم استكمال قيود المصروفات والتسويات والجرد قبل الاعتماد المحاسبي.',
+        style: TextStyle(color: Colors.black54),
+      ),
+    ],
+  );
+
   Future<void> editProduct() async {
     final name=TextEditingController(),sku=TextEditingController(),category=TextEditingController(),price=TextEditingController(),cost=TextEditingController(),qty=TextEditingController();
     final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('إضافة صنف'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[field(name,'اسم الصنف'),field(sku,'الباركود / SKU'),field(category,'التصنيف'),field(price,'سعر البيع',number:true),field(cost,'التكلفة',number:true),field(qty,'الكمية الافتتاحية',number:true)])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('حفظ'))]));
