@@ -93,8 +93,35 @@ class AppDatabase {
 
   Future<List<Map<String,Object?>>> rows(String table, {String? orderBy}) async =>
       (await database).query(table, orderBy: orderBy);
-  Future<int> addProduct(Map<String,Object?> row) async => (await database).insert('products', row);
-  Future<int> addParty(Map<String,Object?> row) async => (await database).insert('parties', row);
+  Future<int> addProduct(Map<String,Object?> row) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final result = await txn.insert('products', row);
+      final openingValue = ((row['quantity'] as num?)?.toDouble() ?? 0) * ((row['cost'] as num?)?.toDouble() ?? 0);
+      if (openingValue > 0) {
+        final header = 'h_open_${row['id']}';
+        await txn.insert('journal_headers', {'id':header,'date':DateTime.now().toIso8601String(),'description':'رصيد مخزون افتتاحي: ${row['name']}','tx_type':'INITIAL'});
+        await txn.insert('journal_lines', {'id':'${header}_1','header_id':header,'account_id':'acc_inventory','debit':openingValue,'credit':0,'note':'إثبات قيمة المخزون الافتتاحي'});
+        await txn.insert('journal_lines', {'id':'${header}_2','header_id':header,'account_id':'acc_equity','debit':0,'credit':openingValue,'note':'مقابل رصيد المخزون الافتتاحي'});
+      }
+      return result;
+    });
+  }
+  Future<int> addParty(Map<String,Object?> row) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final result = await txn.insert('parties', row);
+      final opening = (row['initial_balance'] as num?)?.toDouble() ?? 0;
+      if (opening > 0) {
+        final customer = row['type'] == 'CUSTOMER';
+        final header = 'h_party_${row['id']}';
+        await txn.insert('journal_headers', {'id':header,'date':DateTime.now().toIso8601String(),'description':'رصيد افتتاحي طرف: ${row['name']}','tx_type':'INITIAL','party_id':row['id']});
+        await txn.insert('journal_lines', {'id':'${header}_1','header_id':header,'account_id':customer?'acc_receivable':'acc_equity','debit':opening,'credit':0,'note':'إثبات الرصيد الافتتاحي'});
+        await txn.insert('journal_lines', {'id':'${header}_2','header_id':header,'account_id':customer?'acc_equity':'acc_payable','debit':0,'credit':opening,'note':'مقابل الرصيد الافتتاحي'});
+      }
+      return result;
+    });
+  }
   Future<int> addEmployee(Map<String,Object?> row) async => (await database).insert('employees', row);
 
   Future<void> createInvoice({
@@ -108,7 +135,8 @@ class AppDatabase {
       double subtotal = 0, discount = 0, tax = 0;
       final normalized = <Map<String,dynamic>>[];
       for (final item in items) {
-        final product = (await txn.query('products', where:'id = ?', whereArgs:[item['product_id']], limit:1)).firstOrNull;
+        final matches = await txn.query('products', where:'id = ?', whereArgs:[item['product_id']], limit:1);
+        final product = matches.isEmpty ? null : matches.first;
         if (product == null) throw Exception('أحد الأصناف غير موجود');
         final qty = (item['quantity'] as num).toDouble();
         final price = (item['price'] as num).toDouble();
@@ -181,8 +209,8 @@ class AppDatabase {
     final income = await db.rawQuery("SELECT COALESCE(SUM(credit-debit),0) v FROM journal_lines WHERE account_id='acc_sales'");
     final expenses = await db.rawQuery("SELECT COALESCE(SUM(debit-credit),0) v FROM journal_lines WHERE account_id IN ('acc_cost_sales','acc_other_exp','acc_purchases')");
     final stock = await db.rawQuery('SELECT COALESCE(SUM(quantity*cost),0) v FROM products');
-    final receivable = await db.rawQuery("SELECT COALESCE(SUM(balance_amount),0) v FROM invoices WHERE type='SALE'");
-    final payable = await db.rawQuery("SELECT COALESCE(SUM(balance_amount),0) v FROM invoices WHERE type='SUPPLY'");
+    final receivable = await db.rawQuery("SELECT COALESCE((SELECT SUM(balance_amount) FROM invoices WHERE type='SALE'),0) + COALESCE((SELECT SUM(initial_balance) FROM parties WHERE type='CUSTOMER'),0) v");
+    final payable = await db.rawQuery("SELECT COALESCE((SELECT SUM(balance_amount) FROM invoices WHERE type='SUPPLY'),0) + COALESCE((SELECT SUM(initial_balance) FROM parties WHERE type='SUPPLIER'),0) v");
     final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM invoices')) ?? 0;
     double v(List<Map<String,Object?>> x) => (x.first['v'] as num).toDouble();
     return {'income':v(income),'expenses':v(expenses),'profit':v(income)-v(expenses),'stock':v(stock),'receivable':v(receivable),'payable':v(payable),'invoices':count};
