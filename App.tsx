@@ -25,6 +25,8 @@ const DEFAULT_ACCOUNTS: Account[] = [
   { id: 'acc_bank', name: 'بنك / تحويل', type: 'ASSET' },
   { id: 'acc_sales', name: 'مبيعات', type: 'INCOME' },
   { id: 'acc_inventory', name: 'المخزون', type: 'ASSET' },
+  { id: 'acc_receivable', name: 'العملاء (ذمم مدينة)', type: 'ASSET' },
+  { id: 'acc_payable', name: 'الموردون (ذمم دائنة)', type: 'LIABILITY' },
   { id: 'acc_cost_sales', name: 'تكلفة المبيعات', type: 'EXPENSE' },
   { id: 'acc_vat_out', name: 'ضريبة مخرجات (VAT)', type: 'LIABILITY' },
   { id: 'acc_vat_in', name: 'ضريبة مدخلات (VAT)', type: 'ASSET' },
@@ -118,14 +120,15 @@ const App: React.FC = () => {
       const pHeaders = headers.filter(h => h.partyId === p.id);
       let pDebit = 0;
       let pCredit = 0;
+      const controlAccountId = p.type === 'CUSTOMER' ? 'acc_receivable' : 'acc_payable';
       pHeaders.forEach(h => {
-        lines.filter(l => l.headerId === h.id).forEach(l => {
+        lines.filter(l => l.headerId === h.id && l.accountId === controlAccountId).forEach(l => {
           pDebit += l.debit;
           pCredit += l.credit;
         });
       });
 
-      const balance = p.type === 'CUSTOMER' 
+      const balance = p.type === 'CUSTOMER'
         ? p.initialBalance + (pDebit - pCredit)
         : p.initialBalance + (pCredit - pDebit);
 
@@ -150,6 +153,26 @@ const App: React.FC = () => {
   }, [lines, accounts, parties, headers]);
 
   const handleCreateInvoice = (newInvoice: Invoice) => {
+    if (!Number.isFinite(newInvoice.total) || newInvoice.total <= 0) {
+      alert('لا يمكن حفظ فاتورة بإجمالي غير صالح.');
+      return;
+    }
+    if (!Number.isFinite(newInvoice.paidAmount) || newInvoice.paidAmount < 0 || newInvoice.paidAmount > newInvoice.total) {
+      alert('المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة.');
+      return;
+    }
+    if (newInvoice.type === 'SALE') {
+      const insufficient = newInvoice.items.find(item => {
+        const product = inventory.find(row => row.id === item.productId);
+        return !product || !Number.isFinite(item.quantity) || item.quantity <= 0 || product.quantity < item.quantity;
+      });
+      if (insufficient) {
+        const product = inventory.find(row => row.id === insufficient.productId);
+        alert(product ? `الكمية المتاحة من ${product.name} هي ${product.quantity} فقط.` : 'يوجد منتج غير موجود في المخزون.');
+        return;
+      }
+    }
+    newInvoice.balanceAmount = Math.max(0, newInvoice.total - newInvoice.paidAmount);
     const headerId = `h_inv_${newInvoice.id}`;
     
     let currentPartyId = newInvoice.partyId;
@@ -182,6 +205,9 @@ const App: React.FC = () => {
       if (newInvoice.paidAmount > 0) {
         newLines.push({ id: `${headerId}_l1`, headerId, accountId: 'acc_cash', debit: newInvoice.paidAmount, credit: 0, note: 'المسدد من الفاتورة' });
       }
+      if (newInvoice.balanceAmount > 0) {
+        newLines.push({ id: `${headerId}_receivable`, headerId, accountId: 'acc_receivable', debit: newInvoice.balanceAmount, credit: 0, note: 'المتبقي على العميل' });
+      }
       newLines.push({ id: `${headerId}_l2`, headerId, accountId: 'acc_sales', debit: 0, credit: newInvoice.subtotal - newInvoice.totalDiscount, note: 'صافي المبيعات' });
       if (newInvoice.totalTax > 0) {
         newLines.push({ id: `${headerId}_l3`, headerId, accountId: 'acc_vat_out', debit: 0, credit: newInvoice.totalTax, note: 'ضريبة مخرجات' });
@@ -190,10 +216,10 @@ const App: React.FC = () => {
       let totalCost = 0;
       newInvoice.items.forEach(item => {
         const p = updatedInventory.find(inv => inv.id === item.productId);
-        if (p) {
-          p.quantity -= item.quantity;
-          totalCost += (p.cost * item.quantity);
-        }
+        if (!p) throw new Error(`المنتج غير موجود في المخزون: ${item.name}`);
+        if (p.quantity < item.quantity) throw new Error(`الكمية غير كافية للمنتج ${p.name}. المتاح: ${p.quantity}`);
+        p.quantity -= item.quantity;
+        totalCost += (p.cost * item.quantity);
       });
       newLines.push({ id: `${headerId}_cogs`, headerId, accountId: 'acc_cost_sales', debit: totalCost, credit: 0, note: 'تكلفة بضاعة مباعة' });
       newLines.push({ id: `${headerId}_inv`, headerId, accountId: 'acc_inventory', debit: 0, credit: totalCost, note: 'صرف من المخزن' });
@@ -205,6 +231,9 @@ const App: React.FC = () => {
       }
       if (newInvoice.paidAmount > 0) {
         newLines.push({ id: `${headerId}_l3`, headerId, accountId: 'acc_cash', debit: 0, credit: newInvoice.paidAmount, note: 'المسدد للمورد' });
+      }
+      if (newInvoice.balanceAmount > 0) {
+        newLines.push({ id: `${headerId}_payable`, headerId, accountId: 'acc_payable', debit: 0, credit: newInvoice.balanceAmount, note: 'المتبقي للمورد' });
       }
 
       newInvoice.items.forEach(item => {
