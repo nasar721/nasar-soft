@@ -13,6 +13,7 @@ import Header from './components/Header.tsx';
 import Settings from './components/Settings.tsx';
 import InventoryReport from './components/InventoryReport.tsx';
 import BackupRestore from './components/BackupRestore.tsx';
+import { loadAppData, saveAppData } from './lib/storage.ts';
 import { 
   HomeIcon, ShoppingBagIcon, CubeIcon, 
   ChartBarIcon, IdentificationIcon, ListBulletIcon, 
@@ -62,37 +63,43 @@ const App: React.FC = () => {
   const [parties, setParties] = useState<Party[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(DEFAULT_SETTINGS);
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageBackend, setStorageBackend] = useState<'indexeddb' | 'localstorage'>('indexeddb');
 
   useEffect(() => {
-    const savedHeaders = localStorage.getItem('acc_headers');
-    const savedLines = localStorage.getItem('acc_lines');
-    const savedInventory = localStorage.getItem('acc_inventory');
-    const savedEmployees = localStorage.getItem('acc_employees');
-    const savedParties = localStorage.getItem('acc_parties');
-    const savedInvoices = localStorage.getItem('acc_invoices');
-    const savedSettings = localStorage.getItem('acc_settings');
-    
-    if (savedHeaders) setHeaders(JSON.parse(savedHeaders));
-    if (savedLines) setLines(JSON.parse(savedLines));
-    if (savedInventory) setInventory(JSON.parse(savedInventory));
-    if (savedEmployees) setEmployees(JSON.parse(savedEmployees));
-    if (savedParties) setParties(JSON.parse(savedParties));
-    if (savedInvoices) setInvoices(JSON.parse(savedInvoices));
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      setCompanySettings({ ...DEFAULT_SETTINGS, ...parsed });
-    }
+    let active = true;
+    loadAppData({
+      headers: [], lines: [], inventory: [], employees: [], parties: [],
+      invoices: [], companySettings: DEFAULT_SETTINGS
+    }).then(({ data, backend }) => {
+      if (!active) return;
+      setHeaders(data.headers);
+      setLines(data.lines);
+      setInventory(data.inventory);
+      setEmployees(data.employees);
+      setParties(data.parties);
+      setInvoices(data.invoices);
+      setCompanySettings({ ...DEFAULT_SETTINGS, ...data.companySettings });
+      setStorageBackend(backend);
+      setStorageReady(true);
+    }).catch(error => {
+      console.error('تعذر تحميل البيانات المحلية:', error);
+      if (active) setStorageReady(true);
+    });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('acc_headers', JSON.stringify(headers));
-    localStorage.setItem('acc_lines', JSON.stringify(lines));
-    localStorage.setItem('acc_inventory', JSON.stringify(inventory));
-    localStorage.setItem('acc_employees', JSON.stringify(employees));
-    localStorage.setItem('acc_parties', JSON.stringify(parties));
-    localStorage.setItem('acc_invoices', JSON.stringify(invoices));
-    localStorage.setItem('acc_settings', JSON.stringify(companySettings));
-  }, [headers, lines, inventory, employees, parties, invoices, companySettings]);
+    if (!storageReady) return;
+    const data = { headers, lines, inventory, employees, parties, invoices, companySettings };
+    let cancelled = false;
+    saveAppData(data).then(backend => {
+      if (!cancelled) setStorageBackend(backend);
+    }).catch(error => {
+      console.error('تعذر حفظ البيانات محلياً:', error);
+    });
+    return () => { cancelled = true; };
+  }, [storageReady, headers, lines, inventory, employees, parties, invoices, companySettings]);
 
   const summary: Summary = useMemo(() => {
     let totalIncome = 0;
