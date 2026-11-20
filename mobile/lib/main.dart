@@ -41,7 +41,7 @@ class _HomePageState extends State<HomePage> {
   @override void initState(){super.initState();refresh();}
   Future<void> refresh() async {
     final s=await db.dashboard(), p=await db.rows('products',orderBy:'name'), a=await db.rows('parties',orderBy:'name'), i=await db.rows('invoices',orderBy:'date DESC');
-    if(!mounted)return; setState(()=>{stats=s,products=p,parties=a,invoices=i,loading=false});
+    if(!mounted)return; setState(() { stats=s; products=p; parties=a; invoices=i; loading=false; });
   }
   @override Widget build(BuildContext context) {
     final pages=[dashboard(),invoicePage(),productPage(),partyPage(),reportPage()];
@@ -88,17 +88,17 @@ class _HomePageState extends State<HomePage> {
   Widget field(TextEditingController c,String label,{bool number=false})=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:c,keyboardType:number?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,decoration:InputDecoration(labelText:label)));
   Future<void> newInvoice() async {
     if(products.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('أضف صنفاً للمخزون أولاً')));return;}
-    String type='SALE',party='',selected=products.first['id'].toString(); final qty=TextEditingController(text:'1'),paid=TextEditingController(text:'0'),tax=TextEditingController(text:'0');
+    String type='SALE',selected=products.first['id'].toString(); final partyController=TextEditingController(),qty=TextEditingController(text:'1'),paid=TextEditingController(text:'0'),tax=TextEditingController(text:'0');
     final chosen=<Map<String,dynamic>>[];
     final ok=await showDialog<bool>(context:context,builder:(c)=>StatefulBuilder(builder:(c,set)=>AlertDialog(title:const Text('إنشاء فاتورة'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
       DropdownButtonFormField<String>(value:type,decoration:const InputDecoration(labelText:'نوع الفاتورة'),items:const [DropdownMenuItem(value:'SALE',child:Text('مبيعات')),DropdownMenuItem(value:'SUPPLY',child:Text('مشتريات'))],onChanged:(v)=>set(()=>type=v??'SALE')),
-      field(TextEditingController(text:party),'اسم العميل / المورد'),
+      field(partyController,'اسم العميل / المورد'),
       DropdownButtonFormField<String>(value:selected,decoration:const InputDecoration(labelText:'الصنف'),items:products.map((p)=>DropdownMenuItem(value:p['id'].toString(),child:Text('${p['name']} • ${money(p['price'])}'))).toList(),onChanged:(v)=>set(()=>selected=v??selected)),
       field(qty,'الكمية',number:true),field(tax,'الضريبة %',number:true),field(paid,'المبلغ المدفوع',number:true),
-      OutlinedButton.icon(onPressed:(){final p=products.firstWhere((x)=>x['id']==selected);chosen.add({'product_id':selected,'quantity':double.tryParse(qty.text)??1,'price':(p['price'] as num).toDouble(),'discount':0});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تمت إضافة الصنف للفاتورة')));},icon:const Icon(Icons.add),label:const Text('إضافة الصنف المحدد')),
+      OutlinedButton.icon(onPressed:(){final p=products.firstWhere((x)=>x['id']==selected);set(()=>chosen.add({'product_id':selected,'quantity':double.tryParse(qty.text)??1,'price':(p['price'] as num).toDouble(),'discount':0}));ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تمت إضافة الصنف للفاتورة')));},icon:const Icon(Icons.add),label:const Text('إضافة الصنف المحدد')),
       Text('الأصناف المضافة: ${chosen.length}')
     ])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('حفظ الفاتورة'))])));
-    if(ok==true&&chosen.isNotEmpty){try{await db.createInvoice(type:type,partyName:party.trim().isEmpty?(type=='SALE'?'عميل نقدي':'مورد'):party.trim(),items:chosen,paid:double.tryParse(paid.text)??0,taxRate:double.tryParse(tax.text)??0);await refresh();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ الفاتورة والقيد المحاسبي')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
+    if(ok==true&&chosen.isNotEmpty){try{await db.createInvoice(type:type,partyName:partyController.text.trim().isEmpty?(type=='SALE'?'عميل نقدي':'مورد'):partyController.text.trim(),items:chosen,paid:double.tryParse(paid.text)??0,taxRate:double.tryParse(tax.text)??0);await refresh();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ الفاتورة والقيد المحاسبي')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
   }
   Future<void> backup() async {
     final action=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.upload_file),title:const Text('إنشاء نسخة احتياطية'),onTap:()=>Navigator.pop(c,'export')),ListTile(leading:const Icon(Icons.restore),title:const Text('استعادة نسخة احتياطية'),onTap:()=>Navigator.pop(c,'import'))])));
