@@ -16,6 +16,8 @@ const DATABASE_NAME = 'nasser-soft-local';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'app-data';
 const STATE_KEY = 'primary';
+let writeQueue: Promise<void> = Promise.resolve();
+
 const LEGACY_KEYS: Record<keyof AppData, string> = {
   headers: 'acc_headers',
   lines: 'acc_lines',
@@ -86,31 +88,35 @@ export async function loadAppData(defaults: AppData): Promise<{ data: AppData; b
   }
 }
 
-export async function saveAppData(data: AppData): Promise<'indexeddb' | 'localstorage'> {
-  try {
-    const db = await openDatabase();
+export function saveAppData(data: AppData): Promise<'indexeddb' | 'localstorage'> {
+  const operation = writeQueue.then(async () => {
     try {
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(data, STATE_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error ?? new Error('Unable to save local data.'));
-        tx.onabort = () => reject(tx.error ?? new Error('Local save was aborted.'));
-      });
-      return 'indexeddb';
-    } finally {
-      db.close();
-    }
-  } catch (error) {
-    console.error('IndexedDB save failed; falling back to localStorage.', error);
-    try {
-      for (const key of Object.keys(LEGACY_KEYS) as (keyof AppData)[]) {
-        localStorage.setItem(LEGACY_KEYS[key], JSON.stringify(data[key]));
+      const db = await openDatabase();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(data, STATE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error ?? new Error('Unable to save local data.'));
+          tx.onabort = () => reject(tx.error ?? new Error('Local save was aborted.'));
+        });
+        return 'indexeddb' as const;
+      } finally {
+        db.close();
       }
-      return 'localstorage';
-    } catch (fallbackError) {
-      console.error('Both local storage backends failed.', fallbackError);
-      throw fallbackError;
+    } catch (error) {
+      console.error('IndexedDB save failed; falling back to localStorage.', error);
+      try {
+        for (const key of Object.keys(LEGACY_KEYS) as (keyof AppData)[]) {
+          localStorage.setItem(LEGACY_KEYS[key], JSON.stringify(data[key]));
+        }
+        return 'localstorage' as const;
+      } catch (fallbackError) {
+        console.error('Both local storage backends failed.', fallbackError);
+        throw fallbackError;
+      }
     }
-  }
+  });
+  writeQueue = operation.then(() => undefined, () => undefined);
+  return operation;
 }
