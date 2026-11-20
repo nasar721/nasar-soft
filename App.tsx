@@ -322,6 +322,13 @@ const App: React.FC = () => {
     <div className="flex flex-col min-h-screen bg-[#FDFDFD] pb-32 font-['Cairo'] antialiased">
       <Header />
       <main className="flex-1 p-5 max-w-lg mx-auto w-full relative">
+        <div role="status" className="mb-3 rounded-xl border border-slate-100 bg-white px-3 py-2 text-[11px] font-bold text-slate-500">
+          {!storageReady
+            ? 'جارٍ تحميل قاعدة البيانات المحلية...'
+            : storageBackend === 'indexeddb'
+              ? '✓ التخزين المحلي النشط: IndexedDB'
+              : 'تنبيه: التخزين الاحتياطي عبر مساحة المتصفح المحلية'}
+        </div>
         {activeTab === 'dashboard' && <Dashboard summary={summary} headers={headers} lines={lines} accounts={accounts} onQuickAction={handleQuickAdd} />}
         {activeTab === 'cashier' && (
           <InvoiceModule 
