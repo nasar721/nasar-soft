@@ -67,16 +67,71 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({
       if (required.some(key => !isArray(data[key])) || !isRecord(data.companySettings)) {
         throw new Error('النسخة غير مكتملة أو تالفة؛ لم يتم تغيير أي بيانات.');
       }
-      const valid = (key: string, fields: string[]) =>
-        (data[key] as unknown[]).every(row => isRecord(row) && fields.every(field => field in row));
+      const rows = (key: string) => data[key] as unknown[];
+      const hasFields = (row: unknown, fields: string[]): row is Record<string, unknown> =>
+        isRecord(row) && fields.every(field => field in row);
+      const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+      const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+      const uniqueIds = (key: string) => {
+        const ids = rows(key).map(row => isRecord(row) ? row.id : undefined);
+        return ids.every(nonEmptyString) && new Set(ids).size === ids.length;
+      };
+      const headersValid = rows('headers').every(row =>
+        hasFields(row, ['id', 'date', 'description', 'txType']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.date) &&
+        nonEmptyString(row.description) && nonEmptyString(row.txType)
+      );
+      const headerIds = new Set(rows('headers').map(row => isRecord(row) ? row.id : undefined));
+      const linesValid = rows('lines').every(row =>
+        hasFields(row, ['id', 'headerId', 'accountId', 'debit', 'credit']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.headerId) &&
+        nonEmptyString(row.accountId) && headerIds.has(row.headerId) &&
+        finiteNumber(row.debit) && finiteNumber(row.credit) &&
+        row.debit >= 0 && row.credit >= 0 && !(row.debit > 0 && row.credit > 0)
+      );
+      const inventoryValid = rows('inventory').every(row =>
+        hasFields(row, ['id', 'name', 'quantity', 'cost', 'price']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.name) &&
+        finiteNumber(row.quantity) && finiteNumber(row.cost) && finiteNumber(row.price) &&
+        row.quantity >= 0 && row.cost >= 0 && row.price >= 0
+      );
+      const employeesValid = rows('employees').every(row =>
+        hasFields(row, ['id', 'name', 'position', 'salary', 'status']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.name) &&
+        nonEmptyString(row.position) && finiteNumber(row.salary) && row.salary >= 0 &&
+        (row.status === 'active' || row.status === 'on_leave')
+      );
+      const partiesValid = rows('parties').every(row =>
+        hasFields(row, ['id', 'name', 'type', 'initialBalance']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.name) &&
+        (row.type === 'CUSTOMER' || row.type === 'SUPPLIER') &&
+        finiteNumber(row.initialBalance)
+      );
+      const invoicesValid = rows('invoices').every(row =>
+        hasFields(row, ['id', 'number', 'type', 'date', 'items', 'total']) &&
+        nonEmptyString(row.id) && nonEmptyString(row.number) && nonEmptyString(row.date) &&
+        (row.type === 'SALE' || row.type === 'SUPPLY') &&
+        Array.isArray(row.items) && row.items.every(item =>
+          hasFields(item, ['productId', 'name', 'quantity', 'price', 'taxRate', 'taxAmount', 'discount', 'total']) &&
+          nonEmptyString(item.name) && finiteNumber(item.quantity) && item.quantity > 0 &&
+          finiteNumber(item.price) && item.price >= 0 && finiteNumber(item.taxRate) &&
+          finiteNumber(item.taxAmount) && finiteNumber(item.discount) &&
+          finiteNumber(item.total) && item.discount >= 0
+        ) &&
+        finiteNumber(row.total) && row.total >= 0
+      );
+      const settings = data.companySettings;
+      const settingsValid = ['name', 'address', 'phone', 'taxNumber', 'primaryColor'].every(key =>
+        nonEmptyString(settings[key])
+      ) && finiteNumber(settings.defaultTaxRate) &&
+        typeof settings.showLogo === 'boolean' &&
+        typeof settings.showTaxNumber === 'boolean' &&
+        typeof settings.showAddress === 'boolean';
       if (
-        !valid('headers', ['id', 'date', 'description', 'txType']) ||
-        !valid('lines', ['id', 'headerId', 'accountId', 'debit', 'credit']) ||
-        !valid('inventory', ['id', 'name', 'quantity', 'cost', 'price']) ||
-        !valid('employees', ['id', 'name', 'position', 'salary', 'status']) ||
-        !valid('parties', ['id', 'name', 'type', 'initialBalance']) ||
-        !valid('invoices', ['id', 'number', 'type', 'date', 'items', 'total'])
-      ) throw new Error('بنية البيانات لا تطابق النسخة الاحتياطية المتوقعة.');
+        !headersValid || !linesValid || !inventoryValid || !employeesValid ||
+        !partiesValid || !invoicesValid || !settingsValid ||
+        ['headers', 'lines', 'inventory', 'employees', 'parties', 'invoices'].some(key => !uniqueIds(key))
+      ) throw new Error('النسخة تحتوي على حقول ناقصة أو قيم غير صالحة أو مراجع غير متطابقة؛ لم يتم تغيير أي بيانات.');
       if (!window.confirm('سيتم استبدال البيانات الحالية ببيانات النسخة المختارة. يُفضّل تنزيل نسخة من بياناتك الحالية أولاً. هل تريد المتابعة؟')) return;
       onRestore({
         headers: data.headers as JournalHeader[],
