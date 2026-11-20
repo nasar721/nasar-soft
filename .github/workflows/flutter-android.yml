@@ -1,0 +1,40 @@
+name: Flutter Android
+
+on:
+  push:
+    branches: [main, "feat/flutter-native-sqlite-android-2026-11-20"]
+    paths: ["mobile/**", ".github/workflows/flutter-android.yml"]
+  pull_request:
+    paths: ["mobile/**", ".github/workflows/flutter-android.yml"]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform
+        run: |
+          if [ ! -d android ]; then
+            flutter create --platforms=android --org com.nassersoft --project-name nasser_soft .
+          fi
+      - name: Resolve packages
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nasser-soft-android-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
