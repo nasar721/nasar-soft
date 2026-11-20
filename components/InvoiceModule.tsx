@@ -68,11 +68,25 @@ export default function InvoiceModule({ inventory, parties, invoices, onSaveInvo
     const product = inventory.find(p => p.id === selectedProductId);
     if (!product) return;
 
-    const basePrice = parseFloat(price) || (type === 'SALE' ? product.price : product.cost);
-    const itemQty = parseFloat(qty) || 1;
-    const itemDiscount = parseFloat(discount) || 0;
+    const enteredPrice = price.trim() === '' ? NaN : Number(price);
+    const basePrice = Number.isFinite(enteredPrice) && enteredPrice >= 0
+      ? enteredPrice
+      : (type === 'SALE' ? product.price : product.cost);
+    const itemQty = Number(qty);
+    const itemDiscount = Number(discount || 0);
+    const ratePercent = Number(currentTaxRate || 0);
+    if (!Number.isFinite(itemQty) || itemQty <= 0 || !Number.isFinite(basePrice) || basePrice < 0 ||
+        !Number.isFinite(itemDiscount) || itemDiscount < 0 || itemDiscount > basePrice * itemQty ||
+        !Number.isFinite(ratePercent) || ratePercent < 0 || ratePercent > 100) {
+      alert('تحقق من الكمية والسعر والخصم ونسبة الضريبة.');
+      return;
+    }
+    if (type === 'SALE' && product.quantity < itemQty) {
+      alert(`الكمية المتاحة من ${product.name} هي ${product.quantity} فقط.`);
+      return;
+    }
     const taxableAmount = (basePrice * itemQty) - itemDiscount;
-    const rate = parseFloat(currentTaxRate) / 100 || 0;
+    const rate = ratePercent / 100;
     const tax = taxableAmount * rate;
 
     const newItem: InvoiceItem = {
@@ -94,9 +108,26 @@ export default function InvoiceModule({ inventory, parties, invoices, onSaveInvo
   };
 
   const saveInvoice = () => {
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      alert('أضف صنفاً واحداً على الأقل قبل حفظ الفاتورة.');
+      return;
+    }
     const partyName = partyId ? (parties.find(p => p.id === partyId)?.name || '') : manualParty;
-    const paid = parseFloat(paidAmount) || 0;
+    const paid = Number(paidAmount);
+    if (!Number.isFinite(paid) || paid < 0 || paid > totals.total) {
+      alert('المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة.');
+      return;
+    }
+    if (type === 'SALE') {
+      const unavailable = items.find(item => {
+        const product = inventory.find(row => row.id === item.productId);
+        return !product || product.quantity < item.quantity;
+      });
+      if (unavailable) {
+        alert('تغيرت الكمية المتاحة منذ إضافة الصنف. راجع المخزون ثم حاول مجدداً.');
+        return;
+      }
+    }
     
     const invoice: Invoice = {
       id: `inv_${Date.now()}`,
